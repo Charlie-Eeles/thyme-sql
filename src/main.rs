@@ -1,9 +1,9 @@
-use std::{cmp::Reverse};
+use std::{cmp::Reverse, env, io, path::{Path, PathBuf}};
 use clap::Parser;
 
 use comfy_table::{Cell, Table};
 use dotenv::dotenv;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::{fs, time::Instant};
 
 fn get_env_var_or_exit(name: &str) -> String {
@@ -28,9 +28,6 @@ async fn main() {
     dotenv().ok();
     let database_url = get_env_var_or_exit("DATABASE_URL");
 
-    let args = Args::parse();
-
-    // TODO: Clean up these pool options
     let pg_pool = match PgPoolOptions::new()
         .max_connections(100)
         .connect(&database_url)
@@ -48,34 +45,10 @@ async fn main() {
 
     println!("Running queries...");
 
-    let mut dir = fs::read_dir(args.target).await.unwrap();
+    let current_dir = env::current_dir().unwrap();
+    let mut res_vec = traverse_dirs(pg_pool, &current_dir).await;
 
-    let mut res_vec: Vec<(String, u128)> = vec![];
-    while let Some(entry) = dir.next_entry().await.unwrap() {
-        if !entry.file_name().to_str().unwrap_or("").ends_with(".sql") {
-            continue
-        }
-
-        let query: String = fs::read_to_string(format!("{}", entry.path().display()))
-            .await
-            .unwrap();
-
-        let query_start_time = Instant::now();
-
-        match sqlx::query(&query).fetch_all(&pg_pool).await {
-            Ok(_) => {
-                let elapsed_time = query_start_time.elapsed();
-                let query_execution_time_ms = elapsed_time.as_millis();
-                res_vec.push((
-                    String::from(entry.file_name().to_str().unwrap_or("")),
-                    query_execution_time_ms,
-                ));
-            }
-            Err(_) => {}
-        }
-    }
-    //TODO: Improve ordering of this, it should check this before even connecting to the db
-    if res_vec.len() == 0 {
+    if res_vec.is_empty() {
         println!("No queries found in directory.");
         return;
     }
@@ -94,4 +67,50 @@ async fn main() {
     }
 
     println!("{table}");
+}
+
+async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
+    //TODO:Remove unwraps
+    let mut stack = vec![dir.to_path_buf()];
+    let mut res_vec: Vec<(String, u128)> = vec![];
+
+    while let Some(current_dir) = stack.pop() {
+        let mut entries = fs::read_dir(&current_dir).await.unwrap();
+
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            let path = entry.path();
+            let file_type = entry.file_type().await.unwrap();
+
+            if file_type.is_dir() {
+                stack.push(path);
+            } else {
+                let filename = entry.file_name().to_str().unwrap_or("").to_string();
+                
+                if !filename.ends_with(".sql") {
+                    continue
+                }
+
+                let query: String = fs::read_to_string(entry.path()).await.unwrap();
+                res_vec.push(execute_queries_in_file(&pg_pool, filename, query).await);
+            }
+        }
+    }
+
+    res_vec
+}
+
+async fn execute_queries_in_file(pg_pool: &PgPool, file_name: String, file_content: String) -> (String, u128) {
+    let query_start_time = Instant::now();
+
+    return match sqlx::query(&file_content).fetch_all(pg_pool).await {
+        Ok(_) => {
+            let elapsed_time = query_start_time.elapsed();
+            let query_execution_time_ms = elapsed_time.as_millis();
+            (
+                file_name,
+                query_execution_time_ms,
+            )
+        }
+        Err(_) => { (file_name, 0)}
+    }
 }
