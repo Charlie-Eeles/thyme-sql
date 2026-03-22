@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, env, io, path::{Path, PathBuf}};
+use std::{cmp::Reverse, env, path::Path};
 use clap::Parser;
 
 use comfy_table::{Cell, Table};
@@ -90,8 +90,15 @@ async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
                     continue
                 }
 
-                let query: String = fs::read_to_string(entry.path()).await.unwrap();
-                res_vec.push(execute_queries_in_file(&pg_pool, filename, query).await);
+                let queries: String = fs::read_to_string(entry.path()).await.unwrap();
+                let queries: Vec<&str> = queries.split(';').collect();
+                
+                for (idx, query) in queries.iter().enumerate() {
+                    if query.trim().is_empty() { continue };
+
+                    let query_name = format!("{} ({})", filename, idx +1);
+                    res_vec.push(execute_queries_in_file(&pg_pool, query_name, &query).await);
+                }
             }
         }
     }
@@ -99,7 +106,7 @@ async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
     res_vec
 }
 
-async fn execute_queries_in_file(pg_pool: &PgPool, file_name: String, file_content: String) -> (String, u128) {
+async fn execute_queries_in_file(pg_pool: &PgPool, file_name: String, file_content: &str) -> (String, u128) {
     let query_start_time = Instant::now();
 
     return match sqlx::query(&file_content).fetch_all(pg_pool).await {
