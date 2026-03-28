@@ -6,6 +6,9 @@ use dotenv::dotenv;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::{fs, time::Instant};
 
+pub const RUN_FLAG: &str = "thyme-run";
+pub const SKIP_FLAG: &str = "thyme-skip";
+
 fn get_env_var_or_exit(name: &str) -> String {
     match std::env::var(name) {
         Ok(val) => val,
@@ -94,7 +97,7 @@ async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
                 let queries: Vec<&str> = queries.split(';').collect();
                 
                 for (idx, query) in queries.iter().enumerate() {
-                    if query.trim().is_empty() { continue };
+                    if query.trim().is_empty() || query.contains(SKIP_FLAG) || !query.contains(RUN_FLAG) { continue };
 
                     let query_name = format!("{} ({})", filename, idx +1);
                     res_vec.push(execute_queries_in_file(&pg_pool, query_name, &query).await);
