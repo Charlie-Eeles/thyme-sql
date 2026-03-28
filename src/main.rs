@@ -1,5 +1,5 @@
 use std::{cmp::Reverse, env, path::Path};
-use clap::Parser;
+use clap::{ArgAction, Parser};
 
 use comfy_table::{Cell, Table};
 use dotenv::dotenv;
@@ -22,13 +22,15 @@ fn get_env_var_or_exit(name: &str) -> String {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = String::from("./"))]
-    target: String,
+    #[arg(short, long, action = ArgAction::Set, default_value_t = true)]
+    require_run_flag: bool,
 }
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+
+    let arg = Args::parse();
     let database_url = get_env_var_or_exit("DATABASE_URL");
 
     let pg_pool = match PgPoolOptions::new()
@@ -49,7 +51,7 @@ async fn main() {
     println!("Running queries...");
 
     let current_dir = env::current_dir().unwrap();
-    let mut res_vec = traverse_dirs(pg_pool, &current_dir).await;
+    let mut res_vec = traverse_dirs(pg_pool, &current_dir, arg.require_run_flag).await;
 
     if res_vec.is_empty() {
         println!("No queries found in directory.");
@@ -72,7 +74,7 @@ async fn main() {
     println!("{table}");
 }
 
-async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
+async fn traverse_dirs(pg_pool: PgPool, dir: &Path, require_run_flag: bool) -> Vec<(String, u128)> {
     //TODO:Remove unwraps
     let mut stack = vec![dir.to_path_buf()];
     let mut res_vec: Vec<(String, u128)> = vec![];
@@ -97,7 +99,7 @@ async fn traverse_dirs(pg_pool: PgPool, dir: &Path) -> Vec<(String, u128)> {
                 let queries: Vec<&str> = queries.split(';').collect();
                 
                 for (idx, query) in queries.iter().enumerate() {
-                    if query.trim().is_empty() || query.contains(SKIP_FLAG) || !query.contains(RUN_FLAG) { continue };
+                    if query.trim().is_empty() || query.contains(SKIP_FLAG) || (!query.contains(RUN_FLAG) && require_run_flag) { continue };
 
                     let query_name = format!("{} ({})", filename, idx +1);
                     res_vec.push(execute_queries_in_file(&pg_pool, query_name, &query).await);
