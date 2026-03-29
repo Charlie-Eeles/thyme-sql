@@ -1,5 +1,9 @@
-use std::{cmp::Reverse, env, path::{Path, PathBuf}};
 use clap::{ArgAction, Parser};
+use std::{
+    cmp::Reverse,
+    env,
+    path::{Path, PathBuf},
+};
 
 use comfy_table::{Cell, Table};
 use dotenv::dotenv;
@@ -73,7 +77,10 @@ async fn main() {
         let dir = arg.dir.unwrap_or_else(|| env::current_dir().unwrap());
 
         if !dir.is_dir() {
-            println!("Provided directory path is not a directory: {}", dir.display());
+            println!(
+                "Provided directory path is not a directory: {}",
+                dir.display()
+            );
             std::process::exit(1);
         }
 
@@ -154,7 +161,11 @@ async fn run_file(pg_pool: &PgPool, path: &Path, require_run_flag: bool) -> Vec<
     res_vec
 }
 
-async fn execute_queries_in_file(pg_pool: &PgPool, file_name: String, file_content: &str) -> (String, u128) {
+async fn execute_queries_in_file(
+    pg_pool: &PgPool,
+    file_name: String,
+    file_content: &str,
+) -> (String, u128) {
     let query_start_time = Instant::now();
 
     match sqlx::query(file_content).fetch_all(pg_pool).await {
