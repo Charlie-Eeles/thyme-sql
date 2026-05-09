@@ -143,13 +143,17 @@ async fn main() {
 
     println!("{table}");
 
-    if arg.test_mode && num_of_failed_queries > 0 {
-        if num_of_failed_queries == 1 {
-            println!("1 query failed.");
+    if arg.test_mode {
+        if num_of_failed_queries > 0 {
+            if num_of_failed_queries == 1 {
+                println!("1 query failed.");
+            } else {
+                println!("{num_of_failed_queries} queries failed.");
+            }
+            std::process::exit(1);
         } else {
-            println!("{num_of_failed_queries} queries failed.");
+            println!("All queries passed.")
         }
-        std::process::exit(1);
     }
 }
 
