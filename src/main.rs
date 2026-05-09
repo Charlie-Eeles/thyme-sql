@@ -344,7 +344,7 @@ fn query_name_from_config(path: &Path, idx: usize, query_config: Option<&QueryCo
 
 fn wrap_query_as_json(query: &str) -> String {
     format!(
-        "select coalesce(jsonb_agg(to_jsonb(thyme_result)), '[]'::jsonb)::text from ({query}) as thyme_result"
+        "select coalesce(jsonb_agg(to_jsonb(thyme_result)), '[]'::jsonb)::text from ({query}) as thyme_result;"
     )
 }
 

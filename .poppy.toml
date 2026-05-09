@@ -1,4 +1,5 @@
 dialect = "PostgreSQL"
+filetypes = ["rs", "sql"]
 
 [format]
 indent = 4
